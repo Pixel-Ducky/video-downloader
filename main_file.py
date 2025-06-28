@@ -5,26 +5,35 @@ from pathlib import Path
 import ffmpeg
 import logging
 from yt_dlp.utils import DownloadError
+from PySide6.QtCore import Signal, QObject
+from yt_dlp.utils import DownloadError
+
 
 
 logger = logging.getLogger('yt_download_app')
 
 #downloader for mp4
-class MyDownloader():
+class MyDownloader(QObject):
+
+    error = Signal(str)#this is how we send the error to pyside
+    finished = Signal()
+    yey_download_complete = Signal(str)
     def __init__(self,url):
+        super().__init__() #calls the constuctor of QObject , aka the QObject __init__()
         logging.basicConfig(filename='yt_errors.log' , level = logging.DEBUG, format='%(levelname)s : %(message)s : %(filename)s')
+        
 
         self.url = url
         self.home_path = Path.home()
         self.downloads_path  = os.path.join(self.home_path,'Desktop','Downloaded_videos_yt') #C:\Users\Buzzer Tea\Desktop\Downloaded_videos_yt   is a string
         self.options_for_video = {'format':'bestvideo',
                         'outtmpl':'b',
-                         'quiet': False ,
+                         'quiet': True ,
                          'cachedir': False}
         
         self.options_for_audio = {'format':'bestaudio',
                         'outtmpl':'k',
-                         'quiet': False,
+                         'quiet': True,
                           'cachedir': False,
                            'merge_output_format': None, }
         
@@ -50,9 +59,19 @@ class MyDownloader():
         with YoutubeDL(option) as ydl:
             try:
                 ydl.download([self.url])
+
             except DownloadError:
-                print('internet is too slow')
+                self.error.emit("Invalid URL. Please enter a valid link.")
+                self.finished.emit()
+            except DownloadError:
+                self.error.emit("conexiunea ta la internet are viteza melcului turbat. Please try again later!")
                 logger.error('internet is too slow ---> %s', 'sorries :( please try again')
+                self.finished.emit()
+            except Exception as e:
+                logger.error('something went very wrong---> %s',e)
+                self.error.emit('something went wrong ,maybe its your internet.\n call me if it persists!')
+                self.finished.emit()
+            
         
 
     def convert_audio_to_mp3(self):#youtube has opus format for audio by default 
@@ -107,7 +126,15 @@ class MyDownloader():
         not_allowed_carachters = '<>:"/\\|?*\0 -;6@#!`~%&()+=}{[]'
         sanitized_title_video = ""
         with YoutubeDL({'quiet':True}) as getting_meta_food :
-            info = getting_meta_food.extract_info(self.url , download=False) #only gets a dictionary of metadata
+            try:
+                info = getting_meta_food.extract_info(self.url , download=False) #only gets a dictionary of metadata
+            except Exception:
+                self.error.emit("Invalid URL. Please enter a valid link! \n⸜(｡˃ ᵕ ˂)⸝♡ \n🌷☆🍵⋆｡°🍡°⋆. ࿔*:🥞")
+                self.finished.emit()
+                return None,None
+
+
+
             title = info.get('title','default_fallback_title')
             formats = info['formats']
 
@@ -159,7 +186,10 @@ class MyDownloader():
     
 
     def actual_downloading_function(self):
+        
         vidyo,audyo = self.getting_metadata()
+        if vidyo ==None and audyo ==None:
+            return 
         self.options_for_video['outtmpl'] = os.path.join(self.downloads_path,vidyo)
         self.options_for_audio['outtmpl'] = os.path.join(self.downloads_path,audyo)
         self.path_and_name_of_video_file = self.options_for_video['outtmpl']
@@ -178,14 +208,18 @@ class MyDownloader():
 
             mp3_path = self.convert_audio_to_mp3()
             self.joining_video_and_mp3(self.path_and_name_of_video_file ,mp3_path,path_and_filename_for_mp3_webm_extension)#self.path_and_name_of_audio_opus_file aka .webm . opus is just the codec
+            
         else:
             os.makedirs(self.downloads_path)
-            if self.check_if_video_folder_exists():
-                for optiony in self.list_of_options:
+            # if self.check_if_video_folder_exists():
+            for optiony in self.list_of_options:
                     self.the_with_block(optiony)
 
             mp3_path = self.convert_audio_to_mp3()
             self.joining_video_and_mp3(self.path_and_name_of_video_file ,mp3_path,path_and_filename_for_mp3_webm_extension)
+
+        self.yey_download_complete.emit('🎀🎉Yey download complete!!!🌷🍰\n                        (๑>◡<๑)')
+        self.finished.emit()
            
             
 
@@ -195,5 +229,5 @@ class MyDownloader():
 
 
 
-downloader_object = MyDownloader('https://www.youtube.com/watch?v=qDcFryDXQ7U')
-downloader_object.actual_downloading_function()
+#downloader_object = MyDownloader('https://www.youtube.com/watch?v=qDcFryDXQ7U')
+#downloader_object.actual_downloading_function()
